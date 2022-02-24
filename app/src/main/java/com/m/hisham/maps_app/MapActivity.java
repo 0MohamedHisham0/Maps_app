@@ -48,8 +48,6 @@ import java.util.List;
 
 
 public class MapActivity extends AppCompatActivity implements OnMapReadyCallback, TaskLoadedCallback {
-
-
     private GoogleMap mMap;
     private LatLng place1, place2;
     private Marker Marker1, Marker2, MarkerMyLocation;
