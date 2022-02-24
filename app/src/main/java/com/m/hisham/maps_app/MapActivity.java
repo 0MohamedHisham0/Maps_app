@@ -1,5 +1,6 @@
 package com.m.hisham.maps_app;
 
+import static com.m.hisham.maps_app.BuildConfig.Ad_unit_id;
 import static com.m.hisham.maps_app.BuildConfig.GOOGLE_MAPS_API_KEY;
 
 import android.Manifest;
@@ -7,6 +8,7 @@ import android.content.Context;
 import android.content.DialogInterface;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
 import android.graphics.drawable.Drawable;
 import android.location.Location;
@@ -17,6 +19,8 @@ import android.os.Bundle;
 import android.util.Log;
 import android.view.View;
 import android.widget.Button;
+import android.widget.ImageButton;
+import android.widget.ImageView;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
@@ -26,6 +30,12 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 
+import com.google.android.gms.ads.AdError;
+import com.google.android.gms.ads.AdRequest;
+import com.google.android.gms.ads.FullScreenContentCallback;
+import com.google.android.gms.ads.LoadAdError;
+import com.google.android.gms.ads.interstitial.InterstitialAd;
+import com.google.android.gms.ads.interstitial.InterstitialAdLoadCallback;
 import com.google.android.gms.location.FusedLocationProviderClient;
 import com.google.android.gms.location.LocationServices;
 import com.google.android.gms.maps.GoogleMap;
@@ -43,14 +53,25 @@ import com.m.hisham.maps_app.directionhelpers.FetchURL;
 import com.m.hisham.maps_app.directionhelpers.TaskLoadedCallback;
 import com.m.hisham.maps_app.local_data.Places_List;
 import com.m.hisham.maps_app.models.Place;
+import com.m.hisham.maps_app.models.Restaurant_Model;
+import com.m.hisham.maps_app.network.remote.Retrofit_Client;
+import com.squareup.picasso.Picasso;
 
+import java.io.IOException;
+import java.net.MalformedURLException;
+import java.net.URL;
 import java.util.List;
+
+import retrofit2.Call;
+import retrofit2.Callback;
+import retrofit2.Response;
 
 
 public class MapActivity extends AppCompatActivity implements OnMapReadyCallback, TaskLoadedCallback {
     private GoogleMap mMap;
     private LatLng place1, place2;
     private Marker Marker1, Marker2, MarkerMyLocation;
+    private String currentPlace;
     private Button getDirection;
     private Polyline currentPolyline;
     private Boolean isFirstButtonClicked = false;
@@ -58,20 +79,28 @@ public class MapActivity extends AppCompatActivity implements OnMapReadyCallback
     private FusedLocationProviderClient fusedLocationClient;
     private LocationManager locationManager;
     private String provider;
+    private Restaurant_Model restaurant_model;
+
+    //AdMob
+    private InterstitialAd mInterstitialAd;
 
     //Views
     private Button btnFirst;
     private Button btnSecond;
     private Button btnMyLocation;
+    private Button btnShowRestaurants;
+    private ImageButton btnShowMyLocation;
+    Bitmap bmp = null;
 
     public static final int MY_PERMISSIONS_REQUEST_LOCATION = 99;
-
 
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.map_activity);
+
         initViews();
+        initAds();
         checkLocationPermission();
 
         //Get Current Location
@@ -82,12 +111,142 @@ public class MapActivity extends AppCompatActivity implements OnMapReadyCallback
         mapFragment.getMapAsync(this);
     }
 
+    private void initAds() {
+        AdRequest adRequest = new AdRequest.Builder().build();
+
+        InterstitialAd.load(this, "ca-app-pub-3940256099942544/1033173712", adRequest,
+                new InterstitialAdLoadCallback() {
+                    @Override
+                    public void onAdLoaded(@NonNull InterstitialAd interstitialAd) {
+                        // The mInterstitialAd reference will be null until
+                        // an ad is loaded.
+                        mInterstitialAd = interstitialAd;
+                        Log.i("AD", "onAdLoaded");
+
+                        mInterstitialAd.setFullScreenContentCallback(new FullScreenContentCallback() {
+                            @Override
+                            public void onAdDismissedFullScreenContent() {
+                                // Called when fullscreen content is dismissed.
+                                Log.d("TAG", "The ad was dismissed.");
+                            }
+
+                            @Override
+                            public void onAdFailedToShowFullScreenContent(AdError adError) {
+                                // Called when fullscreen content failed to show.
+                                Log.d("TAG", "The ad failed to show.");
+                            }
+
+                            @Override
+                            public void onAdShowedFullScreenContent() {
+                                // Called when fullscreen content is shown.
+                                // Make sure to set your reference to null so you don't
+                                // show it a second time.
+                                mInterstitialAd = null;
+                                Log.d("TAG", "The ad was shown.");
+                            }
+                        });
+
+                        mInterstitialAd.show(MapActivity.this);
+                    }
+
+                    @Override
+                    public void onAdFailedToLoad(@NonNull LoadAdError loadAdError) {
+                        // Handle the error
+                        Log.i("AD", loadAdError.getMessage());
+                        mInterstitialAd = null;
+                    }
+                });
+
+
+    }
+
     private void initViews() {
         btnFirst = findViewById(R.id.btnPlaceOne);
         btnSecond = findViewById(R.id.btnPlaceTwo);
         btnMyLocation = findViewById(R.id.btnMyLocation);
         getDirection = findViewById(R.id.btnGetDirection);
+        btnShowRestaurants = findViewById(R.id.btnShowRestaurants);
+        btnShowMyLocation = findViewById(R.id.btnShowMyLocation);
 
+        if (currentPlace != null)
+            btnShowRestaurants.setVisibility(View.VISIBLE);
+        else
+            btnShowRestaurants.setVisibility(View.GONE);
+
+        btnShowMyLocation.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                getCurrentLocation();
+                if (currentPlace != null)
+                    btnShowRestaurants.setVisibility(View.VISIBLE);
+                else
+                    btnShowRestaurants.setVisibility(View.GONE);
+            }
+        });
+
+        btnShowRestaurants.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+
+                if (currentPlace != null) {
+                    Call<Restaurant_Model> call = Retrofit_Client.getInstance().getRestaurants("cruise", currentPlace, "5000", "restaurant");
+                    call.enqueue(new Callback<Restaurant_Model>() {
+                        @Override
+                        public void onResponse(Call<Restaurant_Model> call, Response<Restaurant_Model> response) {
+
+                            restaurant_model = response.body();
+                            for (int i = 0; i < restaurant_model.getResults().size(); i++) {
+                                Restaurant_Model.restaurantItem restaurantItem = restaurant_model.getResults().get(i);
+
+                                LatLng restaurantLocation = new LatLng(Double.parseDouble(restaurantItem.getGeometry().getLocation().getLat()),
+                                        Double.parseDouble(restaurantItem.getGeometry().getLocation().getLng()));
+
+                                Thread thread = new Thread(new Runnable() {
+                                    @Override
+                                    public void run() {
+
+                                        URL url;
+                                        try {
+                                            url = new URL(restaurantItem.getIcon());
+                                            bmp = BitmapFactory.decodeStream(url.openConnection().getInputStream());
+                                        } catch (Exception e) {
+                                            e.printStackTrace();
+                                        }
+
+                                        runOnUiThread(new Runnable() {
+                                            @Override
+                                            public void run() {
+
+                                                if (bmp != null) {
+                                                    mMap.addMarker(
+                                                            new MarkerOptions()
+                                                                    .position(restaurantLocation)
+                                                                    .title(restaurantItem.getName())
+                                                                    .icon(BitmapDescriptorFactory
+                                                                            .fromBitmap(bmp)));
+
+                                                }
+                                            }
+                                        });
+                                    }
+                                });
+                                thread.start();
+
+
+                            }
+                        }
+
+                        @Override
+                        public void onFailure(Call<Restaurant_Model> call, Throwable t) {
+                            Log.i("btnShowRestaurants", "onClick: btnShowRes" + t.getMessage());
+
+                        }
+                    });
+                } else {
+                    Toast.makeText(MapActivity.this, "Please Show your location first!", Toast.LENGTH_SHORT).show();
+                }
+            }
+        });
 
         getDirection.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -118,7 +277,7 @@ public class MapActivity extends AppCompatActivity implements OnMapReadyCallback
             public void onClick(View view) {
                 if (Marker1 != null)
                     Marker1.remove();
-                getCurrentLocation();
+                getCurrentLocationToFirstPlace();
             }
         });
 
@@ -208,7 +367,7 @@ public class MapActivity extends AppCompatActivity implements OnMapReadyCallback
         currentPolyline = mMap.addPolyline((PolylineOptions) values[0]);
     }
 
-    public void getCurrentLocation() {
+    public void getCurrentLocationToFirstPlace() {
         fusedLocationClient.getLastLocation()
                 .addOnSuccessListener(this, new OnSuccessListener<Location>() {
                     @Override
@@ -216,9 +375,23 @@ public class MapActivity extends AppCompatActivity implements OnMapReadyCallback
                         // Got last known location. In some rare situations this can be null.
                         if (location != null) {
                             place1 = new LatLng(location.getLatitude(), location.getLongitude());
-
                             MarkerMyLocation = mMap.addMarker(new MarkerOptions().position(place1).title("Your Location").icon(bitmapDescriptorFromVector(MapActivity.this, R.drawable.icons_my_location)));
                             btnFirst.setText(place1.toString());
+                        }
+                    }
+                });
+    }
+
+    public void getCurrentLocation() {
+        fusedLocationClient.getLastLocation()
+                .addOnSuccessListener(this, new OnSuccessListener<Location>() {
+                    @Override
+                    public void onSuccess(Location location) {
+                        // Got last known location. In some rare situations this can be null.
+                        if (location != null) {
+                            currentPlace = location.getLatitude() + "," + location.getLongitude();
+
+                            MarkerMyLocation = mMap.addMarker(new MarkerOptions().position(new LatLng(location.getLatitude(), location.getLongitude())).title("Your Location").icon(bitmapDescriptorFromVector(MapActivity.this, R.drawable.icons_my_location)));
                         }
                     }
                 });
@@ -322,5 +495,16 @@ public class MapActivity extends AppCompatActivity implements OnMapReadyCallback
         Canvas canvas = new Canvas(bitmap);
         vectorDrawable.draw(canvas);
         return BitmapDescriptorFactory.fromBitmap(bitmap);
+    }
+
+    private void SetImageIntoPicasso(String ImageUrl, ImageView imageView, int ErrorImage) {
+        String ImageURL = "https://image.tmdb.org/t/p/w200/" + ImageUrl;
+        if (!ImageUrl.isEmpty()) {
+            Picasso.get()
+                    .load(ImageURL)
+                    .into(imageView);
+        } else {
+            imageView.setImageResource(ErrorImage);
+        }
     }
 }
