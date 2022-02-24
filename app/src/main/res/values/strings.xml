@@ -2,4 +2,7 @@
     <string name="app_name">Maps_app</string>
     <string name="title_activity_maps">MapsActivity</string>
     <string name="title_activity_map">MapActivity</string>
+    <string name="title_location_permission">Location permission</string>
+    <string name="text_location_permission">Click allow to allow this app to use your location</string>
+    <string name="ok">OK</string>
 </resources>

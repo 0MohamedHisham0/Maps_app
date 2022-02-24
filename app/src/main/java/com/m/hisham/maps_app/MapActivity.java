@@ -2,7 +2,13 @@ package com.m.hisham.maps_app;
 
 import static com.m.hisham.maps_app.BuildConfig.GOOGLE_MAPS_API_KEY;
 
+import android.Manifest;
 import android.content.Context;
+import android.content.DialogInterface;
+import android.content.pm.PackageManager;
+import android.graphics.Bitmap;
+import android.graphics.Canvas;
+import android.graphics.drawable.Drawable;
 import android.location.Location;
 import android.location.LocationListener;
 import android.location.LocationManager;
@@ -15,13 +21,18 @@ import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
 
 import com.google.android.gms.location.FusedLocationProviderClient;
 import com.google.android.gms.location.LocationServices;
 import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.MapFragment;
 import com.google.android.gms.maps.OnMapReadyCallback;
+import com.google.android.gms.maps.model.BitmapDescriptor;
+import com.google.android.gms.maps.model.BitmapDescriptorFactory;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.Marker;
 import com.google.android.gms.maps.model.MarkerOptions;
@@ -41,22 +52,29 @@ public class MapActivity extends AppCompatActivity implements OnMapReadyCallback
 
     private GoogleMap mMap;
     private LatLng place1, place2;
-    Button getDirection;
+    private Marker Marker1, Marker2, MarkerMyLocation;
+    private Button getDirection;
     private Polyline currentPolyline;
     private Boolean isFirstButtonClicked = false;
     private Boolean isSecondButtonClicked = false;
     private FusedLocationProviderClient fusedLocationClient;
+    private LocationManager locationManager;
+    private String provider;
 
     //Views
     private Button btnFirst;
     private Button btnSecond;
     private Button btnMyLocation;
 
+    public static final int MY_PERMISSIONS_REQUEST_LOCATION = 99;
+
+
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.map_activity);
         initViews();
+        checkLocationPermission();
 
         //Get Current Location
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(this);
@@ -72,11 +90,12 @@ public class MapActivity extends AppCompatActivity implements OnMapReadyCallback
         btnMyLocation = findViewById(R.id.btnMyLocation);
         getDirection = findViewById(R.id.btnGetDirection);
 
+
         getDirection.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
                 if (place1 != null && place2 != null) {
-                    new FetchURL(MapActivity.this).execute(getUrl(place1, place2, "driving"), "driving");
+                    new FetchURL(MapActivity.this).execute(getUrl(place1, place2, "DRIVING"), "DRIVING");
                 } else {
                     Toast.makeText(MapActivity.this, "Please choose first and second location", Toast.LENGTH_SHORT).show();
                 }
@@ -99,10 +118,9 @@ public class MapActivity extends AppCompatActivity implements OnMapReadyCallback
         btnMyLocation.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
+                if (Marker1 != null)
+                    Marker1.remove();
                 getCurrentLocation();
-                if (place1 != null)
-                    btnFirst.setText(place1.toString());
-
             }
         });
 
@@ -113,10 +131,18 @@ public class MapActivity extends AppCompatActivity implements OnMapReadyCallback
         mMap = googleMap;
         addMarker(mMap);
 
-
         mMap.setOnMapClickListener(latLng -> {
             if (isFirstButtonClicked) {
                 isFirstButtonClicked = false;
+
+                if (MarkerMyLocation != null)
+                    MarkerMyLocation.remove();
+
+                if (Marker1 != null)
+                    Marker1.remove();
+
+                Marker1 = mMap.addMarker(new MarkerOptions().position(latLng).title("First Location").icon(bitmapDescriptorFromVector(MapActivity.this, R.drawable.icon_location)));
+
                 btnFirst.setText(latLng.toString());
                 place1 = latLng;
             }
@@ -124,10 +150,14 @@ public class MapActivity extends AppCompatActivity implements OnMapReadyCallback
             if (isSecondButtonClicked) {
                 isSecondButtonClicked = false;
                 btnSecond.setText(latLng.toString());
+
+                if (Marker2 != null)
+                    Marker2.remove();
+                Marker2 = mMap.addMarker(new MarkerOptions().position(latLng).title("Second Location").icon(bitmapDescriptorFromVector(MapActivity.this, R.drawable.icon_location)));
+
                 place2 = latLng;
             }
         });
-
 
         mMap.setOnMarkerClickListener(new GoogleMap.OnMarkerClickListener() {
             @Override
@@ -170,8 +200,7 @@ public class MapActivity extends AppCompatActivity implements OnMapReadyCallback
         // Output format
         String output = "json";
         // Building the url to the web service
-        String url = "https://maps.googleapis.com/maps/api/directions/" + output + "?" + parameters + "&key=" + GOOGLE_MAPS_API_KEY;
-        return url;
+        return "https://maps.googleapis.com/maps/api/directions/" + output + "?" + parameters + "&key=" + GOOGLE_MAPS_API_KEY;
     }
 
     @Override
@@ -189,8 +218,111 @@ public class MapActivity extends AppCompatActivity implements OnMapReadyCallback
                         // Got last known location. In some rare situations this can be null.
                         if (location != null) {
                             place1 = new LatLng(location.getLatitude(), location.getLongitude());
+
+                            MarkerMyLocation = mMap.addMarker(new MarkerOptions().position(place1).title("Your Location").icon(bitmapDescriptorFromVector(MapActivity.this, R.drawable.icons_my_location)));
+                            btnFirst.setText(place1.toString());
                         }
                     }
                 });
+    }
+
+    public boolean checkLocationPermission() {
+        if (ContextCompat.checkSelfPermission(this,
+                Manifest.permission.ACCESS_FINE_LOCATION)
+                != PackageManager.PERMISSION_GRANTED) {
+
+            // Should we show an explanation?
+            if (ActivityCompat.shouldShowRequestPermissionRationale(this,
+                    Manifest.permission.ACCESS_FINE_LOCATION)) {
+
+                // Show an explanation to the user *asynchronously* -- don't block
+                // this thread waiting for the user's response! After the user
+                // sees the explanation, try again to request the permission.
+                new AlertDialog.Builder(this)
+                        .setTitle(R.string.title_location_permission)
+                        .setMessage(R.string.text_location_permission)
+                        .setPositiveButton(R.string.ok, new DialogInterface.OnClickListener() {
+                            @Override
+                            public void onClick(DialogInterface dialogInterface, int i) {
+                                //Prompt the user once explanation has been shown
+                                ActivityCompat.requestPermissions(MapActivity.this,
+                                        new String[]{Manifest.permission.ACCESS_FINE_LOCATION},
+                                        MY_PERMISSIONS_REQUEST_LOCATION);
+                            }
+                        })
+                        .create()
+                        .show();
+
+
+            } else {
+                // No explanation needed, we can request the permission.
+                ActivityCompat.requestPermissions(this,
+                        new String[]{Manifest.permission.ACCESS_FINE_LOCATION},
+                        MY_PERMISSIONS_REQUEST_LOCATION);
+            }
+            return false;
+        } else {
+            return true;
+        }
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode,
+                                           String permissions[], int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        switch (requestCode) {
+            case MY_PERMISSIONS_REQUEST_LOCATION: {
+                // If request is cancelled, the result arrays are empty.
+                if (grantResults.length > 0
+                        && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+
+                    // permission was granted, yay! Do the
+                    // location-related task you need to do.
+                    if (ContextCompat.checkSelfPermission(this,
+                            Manifest.permission.ACCESS_FINE_LOCATION)
+                            == PackageManager.PERMISSION_GRANTED) {
+
+                        //Request location updates:
+                    }
+
+                } else {
+
+                    // permission denied, boo! Disable the
+                    // functionality that depends on this permission.
+
+                }
+                return;
+            }
+
+        }
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        if (ContextCompat.checkSelfPermission(this,
+                Manifest.permission.ACCESS_FINE_LOCATION)
+                == PackageManager.PERMISSION_GRANTED) {
+
+        }
+    }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        if (ContextCompat.checkSelfPermission(this,
+                Manifest.permission.ACCESS_FINE_LOCATION)
+                == PackageManager.PERMISSION_GRANTED) {
+
+        }
+    }
+
+    public static BitmapDescriptor bitmapDescriptorFromVector(Context context, int vectorResId) {
+        Drawable vectorDrawable = ContextCompat.getDrawable(context, vectorResId);
+        vectorDrawable.setBounds(0, 0, vectorDrawable.getIntrinsicWidth(), vectorDrawable.getIntrinsicHeight());
+        Bitmap bitmap = Bitmap.createBitmap(vectorDrawable.getIntrinsicWidth(), vectorDrawable.getIntrinsicHeight(), Bitmap.Config.ARGB_8888);
+        Canvas canvas = new Canvas(bitmap);
+        vectorDrawable.draw(canvas);
+        return BitmapDescriptorFactory.fromBitmap(bitmap);
     }
 }

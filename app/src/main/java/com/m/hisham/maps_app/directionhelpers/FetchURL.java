@@ -3,6 +3,7 @@ package com.m.hisham.maps_app.directionhelpers;
 import android.content.Context;
 import android.os.AsyncTask;
 import android.util.Log;
+import android.widget.Toast;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -10,6 +11,7 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.util.Objects;
 
 public class FetchURL extends AsyncTask<String, Void, String> {
     Context mContext;
@@ -27,7 +29,7 @@ public class FetchURL extends AsyncTask<String, Void, String> {
         try {
             // Fetching the data from web service
             data = downloadUrl(strings[0]);
-            Log.d("mylog", "Background task data " + data.toString());
+            Log.d("mylog", "Background task data " + data);
         } catch (Exception e) {
             Log.d("Background Task", e.toString());
         }
@@ -39,7 +41,14 @@ public class FetchURL extends AsyncTask<String, Void, String> {
         super.onPostExecute(s);
         PointsParser parserTask = new PointsParser(mContext, directionMode);
         // Invokes the thread for parsing the JSON data
+
         parserTask.execute(s);
+        Log.i("onPostExecute", "onPostExecute: " + s);
+
+        if (Objects.requireNonNull(s).contains("ZERO_RESULTS")) {
+            Log.i("mylog", "downloadUrl: ----------------");
+            Toast.makeText(mContext, "Sorry there is no directions here!", Toast.LENGTH_SHORT).show();
+        }
     }
 
     private String downloadUrl(String strUrl) throws IOException {
@@ -61,11 +70,14 @@ public class FetchURL extends AsyncTask<String, Void, String> {
                 sb.append(line);
             }
             data = sb.toString();
-            Log.d("mylog", "Downloaded URL: " + data.toString());
+            Log.d("mylog", "Downloaded URL: " + data);
             br.close();
+
         } catch (Exception e) {
-            Log.d("mylog", "Exception downloading URL: " + e.toString());
+
+            Log.d("mylog", "Exception downloading URL: " + e.getMessage());
         } finally {
+            assert iStream != null;
             iStream.close();
             urlConnection.disconnect();
         }
