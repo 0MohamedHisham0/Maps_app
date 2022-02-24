@@ -4,11 +4,12 @@
     <option name="filePathToZoomLevelMap">
       <map>
         <entry key="..\:/androidProject/Maps_app/app/src/main/res/drawable/icon_hotel.xml" value="0.127" />
+        <entry key="..\:/androidProject/Maps_app/app/src/main/res/drawable/icon_location.xml" value="0.1585" />
         <entry key="..\:/androidProject/Maps_app/app/src/main/res/layout/activity_main.xml" value="0.259375" />
         <entry key="..\:/androidProject/Maps_app/app/src/main/res/layout/activity_maps.xml" value="0.259375" />
         <entry key="..\:/androidProject/Maps_app/app/src/main/res/layout/maker_info_content.xml" value="0.1" />
         <entry key="..\:/androidProject/Maps_app/app/src/main/res/layout/maker_info_contents.xml" value="0.264" />
-        <entry key="..\:/androidProject/Maps_app/app/src/main/res/layout/map_activity.xml" value="0.264" />
+        <entry key="..\:/androidProject/Maps_app/app/src/main/res/layout/map_activity.xml" value="0.2" />
       </map>
     </option>
   </component>

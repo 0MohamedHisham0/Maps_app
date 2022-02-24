@@ -89,7 +89,6 @@ public class MapActivity extends AppCompatActivity implements OnMapReadyCallback
     private Button btnSecond;
     private Button btnMyLocation;
     private Button btnShowRestaurants;
-    private ImageButton btnShowMyLocation;
     Bitmap bmp = null;
 
     public static final int MY_PERMISSIONS_REQUEST_LOCATION = 99;
@@ -156,8 +155,6 @@ public class MapActivity extends AppCompatActivity implements OnMapReadyCallback
                         mInterstitialAd = null;
                     }
                 });
-
-
     }
 
     private void initViews() {
@@ -166,23 +163,11 @@ public class MapActivity extends AppCompatActivity implements OnMapReadyCallback
         btnMyLocation = findViewById(R.id.btnMyLocation);
         getDirection = findViewById(R.id.btnGetDirection);
         btnShowRestaurants = findViewById(R.id.btnShowRestaurants);
-        btnShowMyLocation = findViewById(R.id.btnShowMyLocation);
 
         if (currentPlace != null)
             btnShowRestaurants.setVisibility(View.VISIBLE);
         else
             btnShowRestaurants.setVisibility(View.GONE);
-
-        btnShowMyLocation.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View view) {
-                getCurrentLocation();
-                if (currentPlace != null)
-                    btnShowRestaurants.setVisibility(View.VISIBLE);
-                else
-                    btnShowRestaurants.setVisibility(View.GONE);
-            }
-        });
 
         btnShowRestaurants.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -262,6 +247,7 @@ public class MapActivity extends AppCompatActivity implements OnMapReadyCallback
         btnFirst.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
+                Toast.makeText(MapActivity.this, "Select From Where you need to start, from map!", Toast.LENGTH_SHORT).show();
                 isFirstButtonClicked = true;
 
             }
@@ -269,15 +255,19 @@ public class MapActivity extends AppCompatActivity implements OnMapReadyCallback
         btnSecond.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
+                Toast.makeText(MapActivity.this, "Select Where you need to go, from map!", Toast.LENGTH_SHORT).show();
+
                 isSecondButtonClicked = true;
             }
         });
         btnMyLocation.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
+
                 if (Marker1 != null)
                     Marker1.remove();
-                getCurrentLocationToFirstPlace();
+                getCurrentLocation();
+
             }
         });
 
@@ -287,6 +277,15 @@ public class MapActivity extends AppCompatActivity implements OnMapReadyCallback
     public void onMapReady(GoogleMap googleMap) {
         mMap = googleMap;
         addMarker(mMap);
+
+        mMap.setOnMarkerClickListener(marker -> {
+            Toast.makeText(this, "" + marker.getTitle(), Toast.LENGTH_SHORT).show();
+            if (Marker2 != null)
+                Marker2.remove();
+            Marker2 = mMap.addMarker(new MarkerOptions().position(marker.getPosition()).title(marker.getTitle()).icon(bitmapDescriptorFromVector(MapActivity.this, R.drawable.icon_location)));
+            place2 = marker.getPosition();
+            return true;
+        });
 
         mMap.setOnMapClickListener(latLng -> {
             if (isFirstButtonClicked) {
@@ -367,20 +366,7 @@ public class MapActivity extends AppCompatActivity implements OnMapReadyCallback
         currentPolyline = mMap.addPolyline((PolylineOptions) values[0]);
     }
 
-    public void getCurrentLocationToFirstPlace() {
-        fusedLocationClient.getLastLocation()
-                .addOnSuccessListener(this, new OnSuccessListener<Location>() {
-                    @Override
-                    public void onSuccess(Location location) {
-                        // Got last known location. In some rare situations this can be null.
-                        if (location != null) {
-                            place1 = new LatLng(location.getLatitude(), location.getLongitude());
-                            MarkerMyLocation = mMap.addMarker(new MarkerOptions().position(place1).title("Your Location").icon(bitmapDescriptorFromVector(MapActivity.this, R.drawable.icons_my_location)));
-                            btnFirst.setText(place1.toString());
-                        }
-                    }
-                });
-    }
+
 
     public void getCurrentLocation() {
         fusedLocationClient.getLastLocation()
@@ -389,9 +375,14 @@ public class MapActivity extends AppCompatActivity implements OnMapReadyCallback
                     public void onSuccess(Location location) {
                         // Got last known location. In some rare situations this can be null.
                         if (location != null) {
+                            place1 = new LatLng(location.getLatitude(), location.getLongitude());
                             currentPlace = location.getLatitude() + "," + location.getLongitude();
 
-                            MarkerMyLocation = mMap.addMarker(new MarkerOptions().position(new LatLng(location.getLatitude(), location.getLongitude())).title("Your Location").icon(bitmapDescriptorFromVector(MapActivity.this, R.drawable.icons_my_location)));
+                            MarkerMyLocation = mMap.addMarker(new MarkerOptions().position(place1).title("Your Location").icon(bitmapDescriptorFromVector(MapActivity.this, R.drawable.icons_my_location)));
+                            btnFirst.setText("From My Location");
+                            btnShowRestaurants.setVisibility(View.VISIBLE);
+
+
                         }
                     }
                 });
